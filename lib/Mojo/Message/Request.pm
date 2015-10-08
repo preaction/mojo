@@ -10,8 +10,7 @@ has method => 'GET';
 has url => sub { Mojo::URL->new };
 has 'reverse_proxy';
 
-sub clone {
-  my $self = shift;
+sub clone ($self) {
 
   # Dynamic requests cannot be cloned
   return undef unless my $content = $self->content->clone;
@@ -26,29 +25,27 @@ sub clone {
   return $clone;
 }
 
-sub cookies {
-  my $self = shift;
+sub cookies ($self, @cookies) {
 
   # Parse cookies
   my $headers = $self->headers;
   return [map { @{Mojo::Cookie::Request->parse($_)} } $headers->cookie]
-    unless @_;
+    unless @cookies;
 
   # Add cookies
-  my @cookies = $headers->cookie || ();
-  for my $cookie (@_) {
+  my @new = $headers->cookie || ();
+  for my $cookie (@cookies) {
     $cookie = Mojo::Cookie::Request->new($cookie) if ref $cookie eq 'HASH';
-    push @cookies, $cookie;
+    push @new, $cookie;
   }
-  $headers->cookie(join('; ', @cookies));
+  $headers->cookie(join('; ', @new));
 
   return $self;
 }
 
-sub every_param { shift->params->every_param(@_) }
+sub every_param ($self, @args) { $self->params->every_param(@args) }
 
-sub extract_start_line {
-  my ($self, $bufref) = @_;
+sub extract_start_line ($self, $bufref) {
 
   # Ignore any leading empty lines
   return undef unless $$bufref =~ s/^\s*(.*?)\x0d?\x0a//;
@@ -60,9 +57,8 @@ sub extract_start_line {
   return !!($1 eq 'CONNECT' ? $url->authority($2) : $url->parse($2));
 }
 
-sub fix_headers {
-  my $self = shift;
-  $self->{fix} ? return $self : $self->SUPER::fix_headers(@_);
+sub fix_headers ($self) {
+  $self->{fix} ? return $self : $self->SUPER::fix_headers;
 
   # Host
   my $url     = $self->url;
@@ -82,40 +78,37 @@ sub fix_headers {
   return $self;
 }
 
-sub get_start_line_chunk {
-  my ($self, $offset) = @_;
+sub get_start_line_chunk ($self, $offset) {
   $self->_start_line->emit(progress => 'start_line', $offset);
   return substr $self->{start_buffer}, $offset, 131072;
 }
 
-sub is_handshake { lc($_[0]->headers->upgrade // '') eq 'websocket' }
+sub is_handshake ($self) { lc($self->headers->upgrade // '') eq 'websocket' }
 
-sub is_secure {
-  my $url = shift->url;
+sub is_secure ($self) {
+  my $url = $self->url;
   return ($url->protocol || $url->base->protocol) eq 'https';
 }
 
-sub is_xhr {
-  (shift->headers->header('X-Requested-With') // '') =~ /XMLHttpRequest/i;
+sub is_xhr ($self) {
+  ($self->headers->header('X-Requested-With') // '') =~ /XMLHttpRequest/i;
 }
 
-sub param { shift->params->param(@_) }
+sub param ($self, @args) { $self->params->param(@args) }
 
-sub params {
-  my $self = shift;
+sub params ($self) {
   return $self->{params}
     ||= $self->body_params->clone->append($self->query_params);
 }
 
-sub parse {
-  my $self = shift;
+sub parse ($self, @args) {
 
   # Parse CGI environment
-  my $env = @_ > 1 ? {@_} : ref $_[0] eq 'HASH' ? $_[0] : undef;
+  my $env = @args > 1 ? {@args} : ref $args[0] eq 'HASH' ? $args[0] : undef;
   $self->env($env)->_parse_env($env) if $env;
 
   # Parse normal message
-  my @args = $env ? () : @_;
+  @args = $env ? () : @args;
   if (($self->{state} // '') ne 'cgi') { $self->SUPER::parse(@args) }
 
   # Parse CGI content
@@ -146,24 +139,21 @@ sub parse {
   return $self;
 }
 
-sub proxy {
-  my $self = shift;
-  return $self->{proxy} unless @_;
-  $self->{proxy} = !$_[0] || ref $_[0] ? shift : Mojo::URL->new(shift);
+sub proxy ($self, $proxy = undef) {
+  return $self->{proxy} unless defined $proxy;
+  $self->{proxy} = !$proxy || ref $proxy ? $proxy : Mojo::URL->new($proxy);
   return $self;
 }
 
-sub query_params { shift->url->query }
+sub query_params ($self) { $self->url->query }
 
-sub start_line_size { length shift->_start_line->{start_buffer} }
+sub start_line_size ($self) { length $self->_start_line->{start_buffer} }
 
-sub _parse_basic_auth {
-  return undef unless my $header = shift;
-  return $header =~ /Basic (.+)$/ ? b64_decode $1 : undef;
+sub _parse_basic_auth ($header) {
+  return $header ? $header =~ /Basic (.+)$/ ? b64_decode $1 : undef : undef;
 }
 
-sub _parse_env {
-  my ($self, $env) = @_;
+sub _parse_env ($self, $env) {
 
   # Extract headers
   my $headers = $self->headers;
@@ -223,8 +213,7 @@ sub _parse_env {
   $self->{state} = 'cgi';
 }
 
-sub _start_line {
-  my $self = shift;
+sub _start_line ($self) {
 
   return $self if defined $self->{start_buffer};
 

@@ -42,7 +42,7 @@ sub grep {
 }
 
 sub join {
-  Mojo::ByteStream->new(join $_[1] // '', map {"$_"} @{$_[0]});
+  Mojo::ByteStream->new(CORE::join $_[1] // '', map {"$_"} @{$_[0]});
 }
 
 sub last { shift->[-1] }
@@ -63,7 +63,7 @@ sub reduce {
   goto &List::Util::reduce;
 }
 
-sub reverse { $_[0]->new(reverse @{$_[0]}) }
+sub reverse { $_[0]->new(CORE::reverse(@{$_[0]})) }
 
 sub shuffle { $_[0]->new(List::Util::shuffle @{$_[0]}) }
 

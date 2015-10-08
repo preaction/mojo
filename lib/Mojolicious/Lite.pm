@@ -6,6 +6,7 @@ use File::Basename qw(basename dirname);
 use File::Spec::Functions 'catdir';
 use Mojo::UserAgent::Server;
 use Mojo::Util 'monkey_patch';
+use Scalar::Util 'set_prototype';
 
 sub import {
 
@@ -38,11 +39,13 @@ sub import {
   monkey_patch $caller, $_, sub {$app}
     for qw(new app);
   monkey_patch $caller, del => sub { $routes->delete(@_) };
-  monkey_patch $caller, group => sub (&) {
-    (my $old, $root) = ($root, $routes);
-    shift->();
-    ($routes, $root) = ($root, $old);
-  };
+  monkey_patch $caller, group => set_prototype(
+    sub {
+      (my $old, $root) = ($root, $routes);
+      shift->();
+      ($routes, $root) = ($root, $old);
+    } => '&'
+  );
   monkey_patch $caller,
     helper => sub { $app->helper(@_) },
     hook   => sub { $app->hook(@_) },
@@ -66,7 +69,7 @@ Mojolicious::Lite - Micro real-time web framework
 
 =head1 SYNOPSIS
 
-  # Automatically enables "strict", "warnings", "utf8" and Perl 5.10 features
+  # Automatically enables "strict", "warnings", "utf8" and Perl 5.14 features
   use Mojolicious::Lite;
 
   # Route with placeholder

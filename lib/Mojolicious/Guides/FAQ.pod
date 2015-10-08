@@ -70,7 +70,7 @@ community and receive bug fixes, which are currently 5.22.x and 5.20.x.
 L<Mojolicious> follows this model and fully supports these two release series.
 In addition we will also keep the distribution installable up to a certain
 legacy version that we deem worthy of supporting, but not specifically optimize
-for it, this is currently 5.10.1.
+for it, this is currently 5.14.0.
 
 =head2 Do I need to clean my environment before testing Mojolicious?
 

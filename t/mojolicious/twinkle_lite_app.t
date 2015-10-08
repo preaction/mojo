@@ -46,7 +46,7 @@ my $config = plugin JSONConfig => {
   ext      => 'conf',
   template => {
     %$twinkle,
-    append  => '$app->defaults(foo_test => 24)',
+    append  => 'app->defaults(foo_test => 24)',
     prepend => 'my $foo = app->defaults("foo_test");'
   }
 };

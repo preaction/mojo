@@ -5,10 +5,8 @@ use warnings;
 
 use ExtUtils::MakeMaker;
 
-# Pod::Simple 3.09 first shipped with Perl 5.11.2
-# JSON::PP 2.27103 first shipped with Perl 5.13.9
-# Time::Local 1.2 first shipped with Perl 5.13.9
 # IO::Socket::IP 0.26 first shipped with Perl 5.19.8
+# Functon::Parmeters 1.0605 is required up to Perl 5.20.0
 WriteMakefile(
   NAME         => 'Mojolicious',
   VERSION_FROM => 'lib/Mojolicious.pm',
@@ -19,7 +17,7 @@ WriteMakefile(
     dynamic_config => 0,
     'meta-spec'    => {version => 2},
     no_index       => {directory => ['examples', 't']},
-    prereqs        => {runtime => {requires => {perl => '5.010001'}}},
+    prereqs        => {runtime => {requires => {perl => '5.014'}}},
     resources      => {
       bugtracker => {web => 'https://github.com/kraih/mojo/issues'},
       homepage   => 'http://mojolicio.us',
@@ -33,10 +31,8 @@ WriteMakefile(
     },
   },
   PREREQ_PM => {
-    'IO::Socket::IP' => '0.26',
-    'JSON::PP'       => '2.27103',
-    'Pod::Simple'    => '3.09',
-    'Time::Local'    => '1.2'
+    $^V >= 5.020000 ? () : ('Function::Parameters' => '1.0605'),
+    'IO::Socket::IP' => '0.26'
   },
   EXE_FILES => ['script/hypnotoad', 'script/mojo', 'script/morbo'],
   test => {TESTS => 't/*.t t/*/*.t'}

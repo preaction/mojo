@@ -8,9 +8,6 @@ use feature ();
 # No imports because we get subclassed, a lot!
 use Carp ();
 
-# Only Perl 5.14+ requires it on demand
-use IO::Handle ();
-
 # Supported on Perl 5.22+
 my $NAME
   = eval { require Sub::Util; Sub::Util->can('set_subname') } || sub { $_[1] };
@@ -87,7 +84,17 @@ sub import {
 
   # Mojo modules are strict!
   $_->import for qw(strict warnings utf8);
-  feature->import(':5.10');
+  feature->import(':5.14');
+
+  # Core signatures for Perl 5.20+ and Function::Parameters for everything else
+  if ($^V >= 5.020000) {
+    feature->import('signatures');
+    warnings->unimport('experimental::signatures');
+  }
+  else {
+    require Function::Parameters;
+    Function::Parameters->import({sub => 'function_strict'});
+  }
 }
 
 sub new {
@@ -138,7 +145,7 @@ Mojo::Base - Minimal base class for Mojo projects
 L<Mojo::Base> is a simple base class for L<Mojo> projects with fluent
 interfaces.
 
-  # Automatically enables "strict", "warnings", "utf8" and Perl 5.10 features
+  # Automatically enables "strict", "warnings", "utf8" and Perl 5.14 features
   use Mojo::Base -strict;
   use Mojo::Base -base;
   use Mojo::Base 'SomeBaseClass';
@@ -149,15 +156,13 @@ All three forms save a lot of typing.
   use strict;
   use warnings;
   use utf8;
-  use feature ':5.10';
-  use IO::Handle ();
+  use feature ':5.14';
 
   # use Mojo::Base -base;
   use strict;
   use warnings;
   use utf8;
-  use feature ':5.10';
-  use IO::Handle ();
+  use feature ':5.14';
   use Mojo::Base;
   push @ISA, 'Mojo::Base';
   sub has { Mojo::Base::attr(__PACKAGE__, @_) }
@@ -166,8 +171,7 @@ All three forms save a lot of typing.
   use strict;
   use warnings;
   use utf8;
-  use feature ':5.10';
-  use IO::Handle ();
+  use feature ':5.14';
   require SomeBaseClass;
   push @ISA, 'SomeBaseClass';
   use Mojo::Base;

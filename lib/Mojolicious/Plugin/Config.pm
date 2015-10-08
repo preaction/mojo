@@ -14,8 +14,11 @@ sub parse {
   my ($self, $content, $file, $conf, $app) = @_;
 
   # Run Perl code in sandbox
-  my $config = eval 'package Mojolicious::Plugin::Config::Sandbox; no warnings;'
-    . "sub app; local *app = sub { \$app }; use Mojo::Base -strict; $content";
+  no strict 'refs';
+  no warnings 'redefine';
+  local *{"Mojolicious::Plugin::Config::Sandbox::app"} = sub {$app};
+  my $config = eval 'package Mojolicious::Plugin::Config::Sandbox;'
+    . " use Mojo::Base -strict; $content";
   die qq{Can't load configuration from file "$file": $@} if $@;
   die qq{Configuration file "$file" did not return a hash reference.\n}
     unless ref $config eq 'HASH';
@@ -97,11 +100,11 @@ Mojolicious::Plugin::Config - Perl-ish configuration plugin
 
 L<Mojolicious::Plugin::Config> is a Perl-ish configuration plugin.
 
-The application object can be accessed via C<$app> or the C<app> function,
-L<strict>, L<warnings>, L<utf8> and Perl 5.10 features are automatically
-enabled. You can extend the normal configuration file C<$moniker.conf> with
-C<mode> specific ones like C<$moniker.$mode.conf>. A default configuration
-filename will be generated from the value of L<Mojolicious/"moniker">.
+The application object can be accessed via the C<app> function, L<strict>,
+L<warnings>, L<utf8> and Perl 5.14 features are automatically enabled. You can
+extend the normal configuration file C<$moniker.conf> with C<mode> specific ones
+like C<$moniker.$mode.conf>. A default configuration filename will be generated
+from the value of L<Mojolicious/"moniker">.
 
 The code of this plugin is a good example for learning to build new plugins,
 you're welcome to fork it.
