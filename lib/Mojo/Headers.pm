@@ -22,30 +22,28 @@ my %NORMALCASE = map { lc() => $_ } (
 for my $header (values %NORMALCASE) {
   my $name = lc $header;
   $name =~ y/-/_/;
-  monkey_patch __PACKAGE__, $name, sub { shift->header($header => @_) };
+  monkey_patch __PACKAGE__, $name,
+    sub ($self, @args) { $self->header($header => @args) };
 }
 
-sub add {
-  my ($self, $name) = (shift, shift);
+sub add ($self, $name, @values) {
 
   # Make sure we have a normal case entry for name
   my $key = lc $name;
   $self->{normalcase}{$key} //= $name unless $NORMALCASE{$key};
-  push @{$self->{headers}{$key}}, @_;
+  push @{$self->{headers}{$key}}, @values;
 
   return $self;
 }
 
-sub append {
-  my ($self, $name, $value) = @_;
+sub append ($self, $name, $value) {
   my $old = $self->header($name);
   return $self->header($name => defined $old ? "$old, $value" : $value);
 }
 
-sub clone { $_[0]->new->from_hash($_[0]->to_hash(1)) }
+sub clone ($self) { $self->new->from_hash($self->to_hash(1)) }
 
-sub from_hash {
-  my ($self, $hash) = @_;
+sub from_hash ($self, $hash) {
 
   # Empty hash deletes all headers
   delete $self->{headers} if keys %{$hash} == 0;
@@ -59,33 +57,30 @@ sub from_hash {
   return $self;
 }
 
-sub header {
-  my ($self, $name) = (shift, shift);
+sub header ($self, $name, @values) {
 
   # Replace
-  return $self->remove($name)->add($name, @_) if @_;
+  return $self->remove($name)->add($name, @values) if @values;
 
   return undef unless my $headers = $self->{headers}{lc $name};
   return join ', ', @$headers;
 }
 
-sub is_finished { (shift->{state} // '') eq 'finished' }
+sub is_finished ($self) { ($self->{state} // '') eq 'finished' }
 
-sub is_limit_exceeded { !!shift->{limit} }
+sub is_limit_exceeded ($self) { !!$self->{limit} }
 
-sub leftovers { delete shift->{buffer} }
+sub leftovers ($self) { delete $self->{buffer} }
 
-sub names {
-  my $self = shift;
+sub names ($self) {
   return [map { $NORMALCASE{$_} || $self->{normalcase}{$_} || $_ }
       keys %{$self->{headers}}];
 }
 
-sub parse {
-  my $self = shift;
+sub parse ($self, $chunk) {
 
   $self->{state} = 'headers';
-  $self->{buffer} .= shift // '';
+  $self->{buffer} .= $chunk // '';
   my $headers = $self->{cache} ||= [];
   my $size    = $self->max_line_size;
   my $lines   = $self->max_lines;
@@ -118,22 +113,19 @@ sub parse {
   return $self;
 }
 
-sub referrer { shift->header(Referer => @_) }
+sub referrer ($self, @args) { $self->header(Referer => @args) }
 
-sub remove {
-  my ($self, $name) = @_;
+sub remove ($self, $name) {
   delete $self->{headers}{lc $name};
   return $self;
 }
 
-sub to_hash {
-  my ($self, $multi) = @_;
+sub to_hash ($self, $multi = 0) {
   return {map { $_ => $multi ? $self->{headers}{lc $_} : $self->header($_) }
       @{$self->names}};
 }
 
-sub to_string {
-  my $self = shift;
+sub to_string ($self) {
 
   # Make sure multiline values are formatted correctly
   my @headers;
