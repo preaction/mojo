@@ -7,7 +7,7 @@ use List::Util 'first';
 use Mojo::JSON qw(encode_json j);
 use Mojo::Transaction::HTTP;
 use Mojo::Util qw(decode dumper encode trim xor_encode);
-use Mojo::WebSocket 'MAX_WEBSOCKET_SIZE';
+use Mojo::WebSocket qw(build_frame MAX_WEBSOCKET_SIZE);
 
 use constant DEBUG => $ENV{MOJO_WEBSOCKET_DEBUG} || 0;
 
@@ -30,47 +30,6 @@ has handshake => sub { Mojo::Transaction::HTTP->new };
 has max_websocket_size =>
   sub { $ENV{MOJO_MAX_WEBSOCKET_SIZE} || MAX_WEBSOCKET_SIZE };
 
-sub build_frame {
-  my ($self, $fin, $rsv1, $rsv2, $rsv3, $op, $payload) = @_;
-  warn "-- Building frame ($fin, $rsv1, $rsv2, $rsv3, $op)\n" if DEBUG;
-
-  # Head
-  my $head = $op + ($fin ? 128 : 0);
-  $head |= 0b01000000 if $rsv1;
-  $head |= 0b00100000 if $rsv2;
-  $head |= 0b00010000 if $rsv3;
-  my $frame = pack 'C', $head;
-
-  # Small payload
-  my $len    = length $payload;
-  my $masked = $self->masked;
-  if ($len < 126) {
-    warn "-- Small payload ($len)\n@{[dumper $payload]}" if DEBUG;
-    $frame .= pack 'C', $masked ? ($len | 128) : $len;
-  }
-
-  # Extended payload (16-bit)
-  elsif ($len < 65536) {
-    warn "-- Extended 16-bit payload ($len)\n@{[dumper $payload]}" if DEBUG;
-    $frame .= pack 'Cn', $masked ? (126 | 128) : 126, $len;
-  }
-
-  # Extended payload (64-bit with 32-bit fallback)
-  else {
-    warn "-- Extended 64-bit payload ($len)\n@{[dumper $payload]}" if DEBUG;
-    $frame .= pack 'C', $masked ? (127 | 128) : 127;
-    $frame .= MODERN ? pack('Q>', $len) : pack('NN', 0, $len & 0xffffffff);
-  }
-
-  # Mask payload
-  if ($masked) {
-    my $mask = pack 'N', int(rand 9 x 7);
-    $payload = $mask . xor_encode($payload, $mask x 128);
-  }
-
-  return $frame . $payload;
-}
-
 sub build_message {
   my ($self, $frame) = @_;
 
@@ -85,7 +44,7 @@ sub build_message {
   else                       { $frame = [1, 0, 0, 0, BINARY, $frame->{binary}] }
 
   # "permessage-deflate" extension
-  return $self->build_frame(@$frame) unless $self->compressed;
+  return build_frame $self->masked, @$frame unless $self->compressed;
   my $deflate = $self->{deflate} ||= Compress::Raw::Zlib::Deflate->new(
     AppendOutput => 1,
     MemLevel     => 8,
@@ -94,7 +53,7 @@ sub build_message {
   $deflate->deflate($frame->[5], my $out);
   $deflate->flush($out, Z_SYNC_FLUSH);
   @$frame[1, 5] = (1, substr($out, 0, length($out) - 4));
-  return $self->build_frame(@$frame);
+  return build_frame $self->masked, @$frame;
 }
 
 sub connection { shift->handshake->connection }
@@ -138,8 +97,10 @@ sub send {
   my ($self, $msg, $cb) = @_;
 
   $self->once(drain => $cb) if $cb;
-  if   (ref $msg eq 'ARRAY') { $self->{write} .= $self->build_frame(@$msg) }
-  else                       { $self->{write} .= $self->build_message($msg) }
+  if (ref $msg eq 'ARRAY') {
+    $self->{write} .= build_frame $self->masked, @$msg;
+  }
+  else { $self->{write} .= $self->build_message($msg) }
   $self->{state} = 'write';
 
   return $self->emit('resume');
@@ -397,30 +358,6 @@ C<MOJO_MAX_WEBSOCKET_SIZE> environment variable or C<262144> (256KB).
 
 L<Mojo::Transaction::WebSocket> inherits all methods from L<Mojo::Transaction>
 and implements the following new ones.
-
-=head2 build_frame
-
-  my $bytes = $ws->build_frame($fin, $rsv1, $rsv2, $rsv3, $op, $payload);
-
-Build WebSocket frame.
-
-  # Binary frame with FIN bit and payload
-  say $ws->build_frame(1, 0, 0, 0, 2, 'Hello World!');
-
-  # Text frame with payload but without FIN bit
-  say $ws->build_frame(0, 0, 0, 0, 1, 'Hello ');
-
-  # Continuation frame with FIN bit and payload
-  say $ws->build_frame(1, 0, 0, 0, 0, 'World!');
-
-  # Close frame with FIN bit and without payload
-  say $ws->build_frame(1, 0, 0, 0, 8, '');
-
-  # Ping frame with FIN bit and payload
-  say $ws->build_frame(1, 0, 0, 0, 9, 'Test 123');
-
-  # Pong frame with FIN bit and payload
-  say $ws->build_frame(1, 0, 0, 0, 10, 'Test 123');
 
 =head2 build_message
 

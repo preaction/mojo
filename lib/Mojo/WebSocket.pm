@@ -6,7 +6,7 @@ use Config;
 use Mojo::Util qw(b64_encode sha1_bytes xor_encode);
 
 our @EXPORT_OK
-  = qw(challenge client_handshake parse_frame server_handshake MAX_WEBSOCKET_SIZE);
+  = qw(build_frame challenge client_handshake parse_frame server_handshake MAX_WEBSOCKET_SIZE);
 
 # Unique value from RFC 6455
 use constant GUID => '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -17,6 +17,47 @@ use constant MAX_WEBSOCKET_SIZE => 262144;
 # Perl with support for quads
 use constant MODERN =>
   (($Config{use64bitint} // '') eq 'define' || $Config{longsize} >= 8);
+
+sub build_frame {
+  my ($masked, $fin, $rsv1, $rsv2, $rsv3, $op, $payload) = @_;
+  warn "-- Building frame ($fin, $rsv1, $rsv2, $rsv3, $op)\n" if DEBUG;
+
+  # Head
+  my $head = $op + ($fin ? 128 : 0);
+  $head |= 0b01000000 if $rsv1;
+  $head |= 0b00100000 if $rsv2;
+  $head |= 0b00010000 if $rsv3;
+  my $frame = pack 'C', $head;
+
+  # Small payload
+  my $len = length $payload;
+  if ($len < 126) {
+    warn "-- Small payload ($len)\n@{[dumper $payload]}" if DEBUG;
+    $frame .= pack 'C', $masked ? ($len | 128) : $len;
+  }
+
+  # Extended payload (16-bit)
+  elsif ($len < 65536) {
+    warn "-- Extended 16-bit payload ($len)\n@{[dumper $payload]}" if DEBUG;
+    $frame .= pack 'Cn', $masked ? (126 | 128) : 126, $len;
+  }
+
+  # Extended payload (64-bit with 32-bit fallback)
+  else {
+    warn "-- Extended 64-bit payload ($len)\n@{[dumper $payload]}" if DEBUG;
+    $frame .= pack 'C', $masked ? (127 | 128) : 127;
+    $frame .= MODERN ? pack('Q>', $len) : pack('NN', 0, $len & 0xffffffff);
+  }
+
+  # Mask payload
+  if ($masked) {
+    my $mask = pack 'N', int(rand 9 x 7);
+    $payload = $mask . xor_encode($payload, $mask x 128);
+  }
+
+  return $frame . $payload;
+}
+
 
 sub challenge {
   my $tx = shift;
