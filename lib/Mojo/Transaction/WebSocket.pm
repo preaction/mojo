@@ -6,8 +6,8 @@ use Config;
 use List::Util 'first';
 use Mojo::JSON qw(encode_json j);
 use Mojo::Transaction::HTTP;
-use Mojo::Util qw(decode dumper encode trim xor_encode);
-use Mojo::WebSocket qw(build_frame MAX_WEBSOCKET_SIZE);
+use Mojo::Util qw(decode encode trim);
+use Mojo::WebSocket qw(build_frame);
 
 use constant DEBUG => $ENV{MOJO_WEBSOCKET_DEBUG} || 0;
 
@@ -27,8 +27,7 @@ use constant {
 
 has [qw(compressed masked)];
 has handshake => sub { Mojo::Transaction::HTTP->new };
-has max_websocket_size =>
-  sub { $ENV{MOJO_MAX_WEBSOCKET_SIZE} || MAX_WEBSOCKET_SIZE };
+has max_websocket_size => sub { $ENV{MOJO_MAX_WEBSOCKET_SIZE} || 262144 };
 
 sub build_message {
   my ($self, $frame) = @_;

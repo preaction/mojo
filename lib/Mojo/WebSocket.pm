@@ -6,13 +6,12 @@ use Config;
 use Mojo::Util qw(b64_encode sha1_bytes xor_encode);
 
 our @EXPORT_OK
-  = qw(build_frame challenge client_handshake parse_frame server_handshake MAX_WEBSOCKET_SIZE);
+  = qw(build_frame challenge client_handshake parse_frame server_handshake);
 
 # Unique value from RFC 6455
 use constant GUID => '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 use constant DEBUG => $ENV{MOJO_WEBSOCKET_DEBUG} || 0;
-use constant MAX_WEBSOCKET_SIZE => 262144;
 
 # Perl with support for quads
 use constant MODERN =>
@@ -87,8 +86,7 @@ sub client_handshake {
 }
 
 sub parse_frame {
-  my $buffer = shift;
-  my $max_websocket_size = shift || MAX_WEBSOCKET_SIZE;
+  my ($buffer, $max_websocket_size) = @_;
 
   # Head
   return undef unless length $$buffer >= 2;
