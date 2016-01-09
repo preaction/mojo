@@ -7,6 +7,7 @@ use List::Util 'first';
 use Mojo::JSON qw(encode_json j);
 use Mojo::Transaction::HTTP;
 use Mojo::Util qw(decode dumper encode trim xor_encode);
+use Mojo::WebSocket 'MAX_WEBSOCKET_SIZE';
 
 use constant DEBUG => $ENV{MOJO_WEBSOCKET_DEBUG} || 0;
 
@@ -26,7 +27,8 @@ use constant {
 
 has [qw(compressed masked)];
 has handshake => sub { Mojo::Transaction::HTTP->new };
-has max_websocket_size => sub { $ENV{MOJO_MAX_WEBSOCKET_SIZE} || 262144 };
+has max_websocket_size =>
+  sub { $ENV{MOJO_MAX_WEBSOCKET_SIZE} || MAX_WEBSOCKET_SIZE };
 
 sub build_frame {
   my ($self, $fin, $rsv1, $rsv2, $rsv3, $op, $payload) = @_;
@@ -121,62 +123,6 @@ sub new {
   my $self = shift->SUPER::new(@_);
   $self->on(frame => sub { shift->_message(@_) });
   return $self;
-}
-
-sub parse_frame {
-  my ($self, $buffer) = @_;
-
-  # Head
-  return undef unless length $$buffer >= 2;
-  my ($first, $second) = unpack 'C*', substr($$buffer, 0, 2);
-
-  # FIN
-  my $fin = ($first & 0b10000000) == 0b10000000 ? 1 : 0;
-
-  # RSV1-3
-  my $rsv1 = ($first & 0b01000000) == 0b01000000 ? 1 : 0;
-  my $rsv2 = ($first & 0b00100000) == 0b00100000 ? 1 : 0;
-  my $rsv3 = ($first & 0b00010000) == 0b00010000 ? 1 : 0;
-
-  # Opcode
-  my $op = $first & 0b00001111;
-  warn "-- Parsing frame ($fin, $rsv1, $rsv2, $rsv3, $op)\n" if DEBUG;
-
-  # Small payload
-  my ($hlen, $len) = (2, $second & 0b01111111);
-  if ($len < 126) { warn "-- Small payload ($len)\n" if DEBUG }
-
-  # Extended payload (16-bit)
-  elsif ($len == 126) {
-    return undef unless length $$buffer > 4;
-    $hlen = 4;
-    $len = unpack 'n', substr($$buffer, 2, 2);
-    warn "-- Extended 16-bit payload ($len)\n" if DEBUG;
-  }
-
-  # Extended payload (64-bit with 32-bit fallback)
-  elsif ($len == 127) {
-    return undef unless length $$buffer > 10;
-    $hlen = 10;
-    my $ext = substr $$buffer, 2, 8;
-    $len = MODERN ? unpack('Q>', $ext) : unpack('N', substr($ext, 4, 4));
-    warn "-- Extended 64-bit payload ($len)\n" if DEBUG;
-  }
-
-  # Check message size
-  return 1 if $len > $self->max_websocket_size;
-
-  # Check if whole packet has arrived
-  $len += 4 if my $masked = $second & 0b10000000;
-  return undef if length $$buffer < ($hlen + $len);
-  substr $$buffer, 0, $hlen, '';
-
-  # Payload
-  my $payload = $len ? substr($$buffer, 0, $len, '') : '';
-  $payload = xor_encode($payload, substr($payload, 0, 4, '') x 128) if $masked;
-  warn dumper $payload if DEBUG;
-
-  return [$fin, $rsv1, $rsv2, $rsv3, $op, $payload];
 }
 
 sub protocol { shift->res->headers->sec_websocket_protocol }
@@ -545,21 +491,6 @@ Local interface port.
 Construct a new L<Mojo::Transaction::WebSocket> object and subscribe to
 L</"frame"> event with default message parser, which also handles C<PING> and
 C<CLOSE> frames automatically.
-
-=head2 parse_frame
-
-  my $frame = $ws->parse_frame(\$bytes);
-
-Parse WebSocket frame.
-
-  # Parse single frame and remove it from buffer
-  my $frame = $ws->parse_frame(\$buffer);
-  say "FIN: $frame->[0]";
-  say "RSV1: $frame->[1]";
-  say "RSV2: $frame->[2]";
-  say "RSV3: $frame->[3]";
-  say "Opcode: $frame->[4]";
-  say "Payload: $frame->[5]";
 
 =head2 protocol
 
