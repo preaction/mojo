@@ -1,4 +1,5 @@
 package Mojolicious;
+# ABSTRACT: The best darn web framework, period
 use Mojo::Base -base;
 
 # "Fry: Shut up and take my money!"
